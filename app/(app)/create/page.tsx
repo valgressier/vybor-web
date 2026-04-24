@@ -46,7 +46,7 @@ export default function CreatePage() {
       .eq('user_id', user.id)
       .then(({ data }) => {
         const gs = (data ?? [])
-          .map((r: { group: { id: string; name: string } | null }) => r.group)
+          .flatMap((r: { group: { id: any; name: any }[] }) => r.group ?? [])
           .filter(Boolean) as { id: string; name: string }[];
         setGroups(gs);
       });
