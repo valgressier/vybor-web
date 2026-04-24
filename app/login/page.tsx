@@ -1,11 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/auth';
 
-export default function LoginPage() {
+function LoginContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -187,10 +187,18 @@ export default function LoginPage() {
         <p className="text-center text-sm text-[#555575] mt-6">
           Pas encore de compte ?{' '}
           <Link href="/register" className="text-[#FF4D6A] hover:underline font-medium">
-            S'inscrire
+            S&apos;inscrire
           </Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
   );
 }
