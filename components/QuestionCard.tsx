@@ -159,7 +159,8 @@ export function QuestionCard({
     const followingIds = followRows.map((f) => f.following_id as string);
     const profileMap: Record<string, { username: string; avatar_url?: string }> = {};
     followRows.forEach((f) => {
-      if (f.profile) profileMap[f.following_id] = f.profile as { username: string; avatar_url?: string };
+      const p = Array.isArray(f.profile) ? f.profile[0] : f.profile;
+      if (p) profileMap[f.following_id] = p as { username: string; avatar_url?: string };
     });
 
     const { data: votes } = await supabase

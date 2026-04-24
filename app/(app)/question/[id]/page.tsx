@@ -119,7 +119,7 @@ export default function QuestionPage({
       comment_count: commentCount ?? 0,
       following_vote_count: followingVoteCount,
       option_counts: q.options
-        ? q.options.map((_, i) => optionVotes[i] ?? 0)
+        ? q.options.map((_: unknown, i: number) => optionVotes[i] ?? 0)
         : undefined,
       total_votes: scaleCount,
       scale_average: scaleCount > 0 ? scaleSum / scaleCount : null,

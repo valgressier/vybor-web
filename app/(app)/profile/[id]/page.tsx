@@ -258,7 +258,7 @@ export default function ProfilePage({
 
     setModalUsers(
       (data ?? [])
-        .map((r: { profile: Profile | null }) => r.profile)
+        .flatMap((r: { profile: any[] }) => r.profile ?? [])
         .filter(Boolean) as Profile[]
     );
     setModalLoading(false);
