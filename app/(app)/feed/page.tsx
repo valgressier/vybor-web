@@ -129,7 +129,7 @@ export default function FeedPage() {
       user_vote: undefined,
       user_vote_index: undefined,
       option_counts: q.options
-        ? q.options.map((_, i) => optionVoteMap[q.id]?.[i] ?? 0)
+        ? q.options.map((_: unknown, i: number) => optionVoteMap[q.id]?.[i] ?? 0)
         : undefined,
       total_votes: scaleAccMap[q.id]?.count ?? 0,
       scale_average: scaleAccMap[q.id]?.count
@@ -246,7 +246,7 @@ export default function FeedPage() {
         user_vote: myVote?.answer ?? null,
         user_vote_index: myVote?.answer_index ?? null,
         option_counts: q.options
-          ? q.options.map((_, i) => optionVoteMap[q.id]?.[i] ?? 0)
+          ? q.options.map((_: unknown, i: number) => optionVoteMap[q.id]?.[i] ?? 0)
           : undefined,
         total_votes: scaleAccMap[q.id]?.count ?? 0,
         scale_average: scaleAccMap[q.id]?.count
