@@ -35,7 +35,7 @@ export default function ConversationPage({
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) { router.push('/login'); return; }
     loadConversation();
     markAsRead();
   }, [convId, user]);
