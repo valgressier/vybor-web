@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/* ── Light mode (default, no class needed) ── */
+:root {
+  color-scheme: light;
+  --primary: #FF4D6A;
+  --secondary: #8B5CF6;
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-elevated: #ebebf2;
+  --card: #f0f0f7;
+  --border: #dcdce8;
+  --text: #1a1a2e;
+  --text-secondary: #555570;
+}
+
+/* ── Dark mode ── */
+html.dark {
+  color-scheme: dark;
+  --bg: #0D0D14;
+  --surface: #16161F;
+  --surface-elevated: #1E1E2D;
+  --card: #1A1A28;
+  --border: #252538;
+  --text: #FFFFFF;
+  --text-secondary: #8B8BAD;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --font-sans: var(--font-geist-sans);
+}
+
+/* ── Body base (uses CSS vars, responds to theme) ── */
+body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* ── Cursor pointer on all interactive elements ── */
+button,
+[role="button"],
+[role="tab"],
+[role="checkbox"],
+[role="switch"],
+label[for],
+select {
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════════
+   LIGHT MODE — overrides for hardcoded dark Tailwind classes
+   Both uppercase and lowercase hex to cover Tailwind v4 normalization
+   ═══════════════════════════════════════════════════ */
+
+/* --- Backgrounds --- */
+html:not(.dark) .bg-\[\#0D0D14\],
+html:not(.dark) .bg-\[\#0d0d14\]   { background-color: #f5f5f7 !important; }
+
+html:not(.dark) .bg-\[\#16161F\],
+html:not(.dark) .bg-\[\#16161f\]   { background-color: #ffffff !important; }
+
+html:not(.dark) .bg-\[\#1E1E2D\],
+html:not(.dark) .bg-\[\#1e1e2d\]   { background-color: #ebebf2 !important; }
+
+html:not(.dark) .bg-\[\#1A1A28\],
+html:not(.dark) .bg-\[\#1a1a28\]   { background-color: #f0f0f7 !important; }
+
+html:not(.dark) .bg-\[\#252538\]   { background-color: #dcdce8 !important; }
+
+/* Mobile nav with opacity modifier */
+html:not(.dark) .bg-\[\#0D0D14\]\/95,
+html:not(.dark) .bg-\[\#0d0d14\]\/95 { background-color: rgba(245,245,247,0.95) !important; }
+
+/* --- Borders --- */
+html:not(.dark) .border-\[\#252538\] { border-color: #dcdce8 !important; }
+
+/* --- Text --- */
+
+/* Generic white text → dark in light mode */
+html:not(.dark) .text-white         { color: #1a1a2e !important; }
+
+html:not(.dark) .text-\[\#8B8BAD\],
+html:not(.dark) .text-\[\#8b8bad\]  { color: #555570 !important; }
+
+html:not(.dark) .text-\[\#555575\]  { color: #6666aa !important; }
+
+/* Restore white text on elements that have a gradient/colored background via inline style */
+html:not(.dark) [style*="linear-gradient"] .text-white,
+html:not(.dark) .text-white[style*="linear-gradient"],
+html:not(.dark) [style*="background:"] .text-white { color: #ffffff !important; }
+
+/* Colored badge backgrounds keep white text */
+html:not(.dark) .bg-\[\#FF4D6A\] .text-white,
+html:not(.dark) .bg-\[\#ff4d6a\] .text-white,
+html:not(.dark) .bg-\[\#3ECFA8\] .text-white,
+html:not(.dark) .bg-\[\#3ecfa8\] .text-white,
+html:not(.dark) .bg-\[\#7B61FF\] .text-white,
+html:not(.dark) .bg-\[\#7b61ff\] .text-white { color: #ffffff !important; }
+
+/* Selected vote buttons keep white text */
+html:not(.dark) .shadow-\[\#3ECFA8\]\/20.text-white,
+html:not(.dark) .shadow-\[\#FF4D6A\]\/20.text-white { color: #ffffff !important; }
+
+/* --- Hover overrides --- */
+html:not(.dark) .hover\:text-white:hover        { color: #1a1a2e !important; }
+html:not(.dark) .hover\:bg-\[\#16161F\]:hover,
+html:not(.dark) .hover\:bg-\[\#16161f\]:hover   { background-color: #f0f0f7 !important; }
+
+/* --- Ring (avatar border on profile) --- */
+html:not(.dark) .ring-\[\#0D0D14\],
+html:not(.dark) .ring-\[\#0d0d14\]  { --tw-ring-color: #f5f5f7 !important; }
+
+/* --- Placeholders --- */
+html:not(.dark) .placeholder-\[\#555575\]::placeholder { color: #9999bb !important; }
+
+/* --- Focus borders --- */
+html:not(.dark) .focus\:border-\[\#FF4D6A\]\/50:focus { border-color: rgba(255,77,106,0.5) !important; }
