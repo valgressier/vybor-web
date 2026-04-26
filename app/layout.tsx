@@ -10,7 +10,10 @@ export const metadata: Metadata = {
   title: 'Vybor — Partagez vos opinions',
   description:
     "Vybor est l'app mobile pour partager et découvrir des opinions sous forme de sondages.",
-  icons: { icon: '/icon.png' },
+  icons: {
+    icon: '/icon.png',
+    apple: '/icon.png',
+  },
 };
 
 export default function RootLayout({
