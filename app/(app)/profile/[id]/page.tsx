@@ -26,6 +26,8 @@ export default function ProfilePage({
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [questionCount, setQuestionCount] = useState(0);
+  const [answerCount, setAnswerCount] = useState(0);
+  const [votesReceivedCount, setVotesReceivedCount] = useState(0);
   const [followStatus, setFollowStatus] = useState<FollowStatus>('none');
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
@@ -60,6 +62,8 @@ export default function ProfilePage({
       { count: fCount },
       { count: fgCount },
       { count: qCount },
+      { count: aCount },
+      { count: vrCount },
     ] = await Promise.all([
       supabase
         .from('follows')
@@ -74,11 +78,23 @@ export default function ProfilePage({
         .select('*', { count: 'exact', head: true })
         .eq('author_id', id)
         .eq('privacy', 'public'),
+      // Votes cast by this user (answers)
+      supabase
+        .from('votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', id),
+      // Votes received on this user's questions
+      supabase
+        .from('votes')
+        .select('questions!inner(author_id)', { count: 'exact', head: true })
+        .eq('questions.author_id', id),
     ]);
 
     setFollowerCount(fCount ?? 0);
     setFollowingCount(fgCount ?? 0);
     setQuestionCount(qCount ?? 0);
+    setAnswerCount(aCount ?? 0);
+    setVotesReceivedCount(vrCount ?? 0);
 
     // Check follow status
     if (user && !isOwnProfile) {
@@ -352,7 +368,7 @@ export default function ProfilePage({
       )}
 
       {/* Stats */}
-      <div className="flex gap-6 px-2 mb-5">
+      <div className="flex gap-6 px-2 mb-2">
         <button
           onClick={() => openFollowModal('followers')}
           className="text-center hover:opacity-80 transition-opacity"
@@ -368,6 +384,12 @@ export default function ProfilePage({
           <p className="text-[#555575] text-xs">Abonnements</p>
         </button>
       </div>
+
+      {/* Votes récoltés */}
+      <p className="px-2 mb-5 text-xs text-[#555575]">
+        Votes récoltés :{' '}
+        <span className="text-white font-semibold">{votesReceivedCount}</span>
+      </p>
 
       {/* Action buttons */}
       <div className="flex gap-3 px-2 mb-6">
@@ -453,7 +475,7 @@ export default function ProfilePage({
                   : 'text-[#8B8BAD] hover:text-white'
               }`}
             >
-              Réponses
+              Réponses ({answerCount})
             </button>
           </div>
 
