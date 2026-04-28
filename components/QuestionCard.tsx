@@ -51,10 +51,6 @@ interface QuestionStats {
   byCountry: DemoGroup[];
 }
 
-interface ConversationItem {
-  id: string;
-  otherUser: { id: string; username: string; avatar_url?: string };
-}
 
 interface Props {
   question: Question;
@@ -88,11 +84,11 @@ export function QuestionCard({
 
   // Send to friend modal
   const [showSendModal, setShowSendModal] = useState(false);
-  const [conversations, setConversations] = useState<ConversationItem[]>([]);
-  const [convsLoading, setConvsLoading] = useState(false);
-  const [convsLoaded, setConvsLoaded] = useState(false);
-  const [sendingConvId, setSendingConvId] = useState<string | null>(null);
-  const [sentConvIds, setSentConvIds] = useState<Set<string>>(new Set());
+  const [userSearch, setUserSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<{ id: string; username: string; avatar_url?: string }[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [sendingUserId, setSendingUserId] = useState<string | null>(null);
+  const [sentUserIds, setSentUserIds] = useState<Set<string>>(new Set());
 
   // Stats modal
   const [showStats, setShowStats] = useState(false);
@@ -282,48 +278,51 @@ export function QuestionCard({
     setStatsLoading(false);
   };
 
-  const loadConversations = async () => {
-    if (!user || convsLoaded) return;
-    setConvsLoading(true);
-
-    const { data } = await supabase
-      .from('conversations')
-      .select('*')
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-      .order('last_message_at', { ascending: false });
-
-    if (!data || data.length === 0) {
-      setConvsLoaded(true);
-      setConvsLoading(false);
+  const searchUsers = async (query: string) => {
+    if (!user) return;
+    const q2 = query.trim();
+    if (!q2) {
+      setSearchResults([]);
       return;
     }
-
-    const otherIds = data.map((c) => (c.user1_id === user.id ? c.user2_id : c.user1_id));
-    const { data: profiles } = await supabase
+    setSearchLoading(true);
+    const { data } = await supabase
       .from('profiles')
       .select('id, username, avatar_url')
-      .in('id', otherIds);
-
-    const profileMap: Record<string, { username: string; avatar_url?: string }> = {};
-    (profiles ?? []).forEach((p: { id: string; username: string; avatar_url?: string }) => {
-      profileMap[p.id] = p;
-    });
-
-    setConversations(
-      data.map((c) => {
-        const otherId = c.user1_id === user.id ? c.user2_id : c.user1_id;
-        const profile = profileMap[otherId] ?? { username: '?' };
-        return { id: c.id, otherUser: { id: otherId, ...profile } };
-      })
-    );
-    setConvsLoaded(true);
-    setConvsLoading(false);
+      .ilike('username', `%${q2}%`)
+      .neq('id', user.id)
+      .limit(20);
+    setSearchResults(data ?? []);
+    setSearchLoading(false);
   };
 
-  const sendToConversation = async (convId: string) => {
-    if (!user || sendingConvId) return;
-    setSendingConvId(convId);
+  const sendToUser = async (targetId: string) => {
+    if (!user || sendingUserId) return;
+    setSendingUserId(targetId);
     const msgText = `https://vybor.app/question/${q.id}`;
+
+    // Find or create conversation
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('id')
+      .or(
+        `and(user1_id.eq.${user.id},user2_id.eq.${targetId}),and(user1_id.eq.${targetId},user2_id.eq.${user.id})`
+      )
+      .maybeSingle();
+
+    let convId: string;
+    if (existing) {
+      convId = existing.id;
+    } else {
+      const { data: created, error } = await supabase
+        .from('conversations')
+        .insert({ user1_id: user.id, user2_id: targetId })
+        .select('id')
+        .single();
+      if (error || !created) { setSendingUserId(null); return; }
+      convId = created.id;
+    }
+
     const { error } = await supabase.from('messages').insert({
       conversation_id: convId,
       sender_id: user.id,
@@ -334,9 +333,9 @@ export function QuestionCard({
         .from('conversations')
         .update({ last_message_at: new Date().toISOString(), last_message: msgText })
         .eq('id', convId);
-      setSentConvIds((prev) => new Set(prev).add(convId));
+      setSentUserIds((prev) => new Set(prev).add(targetId));
     }
-    setSendingConvId(null);
+    setSendingUserId(null);
   };
 
   const copyLink = async () => {
@@ -614,7 +613,8 @@ export function QuestionCard({
                 e.preventDefault();
                 e.stopPropagation();
                 setShowSendModal(true);
-                if (!convsLoaded) loadConversations();
+                setUserSearch('');
+                setSearchResults([]);
               }}
               title="Envoyer à un ami"
               className="w-8 h-8 flex items-center justify-center rounded-lg text-[#555575] hover:text-[#7B61FF] hover:bg-[#7B61FF]/10 transition-colors"
@@ -646,40 +646,41 @@ export function QuestionCard({
               <>
                 <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setShowShareMenu(false); }} />
                 <div
-                  className="absolute bottom-full right-0 mb-2 w-52 bg-[#1E1E2E] border border-[#252538] rounded-xl shadow-xl overflow-hidden z-20"
+                  className="absolute bottom-full right-0 mb-2 w-52 bg-[#2A2A3D] border border-[#3A3A55] rounded-xl shadow-2xl overflow-hidden z-20 py-1"
                   onClick={(e) => e.stopPropagation()}
                 >
-                <button
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); copyLink(); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-[#252538] transition-colors text-left"
-                >
-                  {linkCopied ? (
-                    <><span className="text-[#3ECFA8]">✓</span><span className="text-[#3ECFA8]">Lien copié !</span></>
-                  ) : (
-                    <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-[#8B8BAD]"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg><span>Copier le lien</span></>
-                  )}
-                </button>
-                <a
-                  href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`https://vybor.app/question/${q.id}`)}&text=${encodeURIComponent(q.text)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => { e.stopPropagation(); setShowShareMenu(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-[#252538] transition-colors"
-                >
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#8B8BAD]"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.631ZM17.083 20.25h1.833L6.934 4.126H4.978Z"/></svg>
-                  <span>Partager sur X</span>
-                </a>
-                <a
-                  href={`https://wa.me/?text=${encodeURIComponent(`${q.text} — https://vybor.app/question/${q.id}`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => { e.stopPropagation(); setShowShareMenu(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-[#252538] transition-colors"
-                >
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-[#8B8BAD]"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.557 4.124 1.528 5.855L0 24l6.335-1.652A11.954 11.954 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.65-.511-5.168-1.403l-.371-.22-3.801.991 1.012-3.698-.242-.381A9.944 9.944 0 0 1 2 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
-                  <span>Partager sur WhatsApp</span>
-                </a>
-              </div>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); copyLink(); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-[#E8E8F0] hover:bg-[#3A3A55] transition-colors text-left"
+                  >
+                    {linkCopied ? (
+                      <><span className="text-[#3ECFA8] text-base">✓</span><span className="text-[#3ECFA8]">Lien copié !</span></>
+                    ) : (
+                      <><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0 text-[#9B9BBD]"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg><span>Copier le lien</span></>
+                    )}
+                  </button>
+                  <div className="h-px bg-[#3A3A55] mx-3" />
+                  <a
+                    href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`https://vybor.app/question/${q.id}`)}&text=${encodeURIComponent(q.text)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => { e.stopPropagation(); setShowShareMenu(false); }}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-[#E8E8F0] hover:bg-[#3A3A55] transition-colors"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0 fill-current text-[#9B9BBD]"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.631ZM17.083 20.25h1.833L6.934 4.126H4.978Z"/></svg>
+                    <span>Partager sur X</span>
+                  </a>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(`${q.text} — https://vybor.app/question/${q.id}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => { e.stopPropagation(); setShowShareMenu(false); }}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-[#E8E8F0] hover:bg-[#3A3A55] transition-colors"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0 fill-current text-[#9B9BBD]"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.557 4.124 1.528 5.855L0 24l6.335-1.652A11.954 11.954 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.65-.511-5.168-1.403l-.371-.22-3.801.991 1.012-3.698-.242-.381A9.944 9.944 0 0 1 2 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
+                    <span>Partager sur WhatsApp</span>
+                  </a>
+                </div>
               </>
             )}
           </div>
@@ -833,36 +834,59 @@ export function QuestionCard({
       onClick={(e) => { if (e.target === e.currentTarget) setShowSendModal(false); }}
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSendModal(false)} />
-      <div className="relative w-full max-w-sm bg-[#16161F] border border-[#252538] rounded-2xl overflow-hidden max-h-[70vh] flex flex-col">
+      <div className="relative w-full max-w-sm bg-[#16161F] border border-[#252538] rounded-2xl overflow-hidden max-h-[75vh] flex flex-col">
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#252538] shrink-0">
           <h3 className="text-base font-bold text-white">Envoyer à un ami</h3>
           <button onClick={() => setShowSendModal(false)} className="text-[#555575] hover:text-white transition-colors text-lg leading-none">✕</button>
         </div>
+
+        {/* Search bar */}
+        <div className="px-4 py-3 border-b border-[#252538] shrink-0">
+          <div className="flex items-center gap-2 bg-[#252538] rounded-xl px-3 py-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-[#555575] shrink-0">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Rechercher un utilisateur…"
+              value={userSearch}
+              onChange={(e) => {
+                setUserSearch(e.target.value);
+                searchUsers(e.target.value);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              autoFocus
+              className="flex-1 bg-transparent text-sm text-white placeholder-[#555575] outline-none"
+            />
+            {searchLoading && (
+              <div className="w-3.5 h-3.5 border-2 border-[#7B61FF] border-t-transparent rounded-full animate-spin shrink-0" />
+            )}
+          </div>
+        </div>
+
+        {/* Results */}
         <div className="overflow-y-auto flex-1">
-          {convsLoading ? (
-            <div className="flex justify-center py-10">
-              <div className="w-6 h-6 border-2 border-[#7B61FF] border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : conversations.length === 0 ? (
-            <p className="text-xs text-[#555575] text-center py-10">Aucune conversation</p>
+          {!userSearch.trim() ? (
+            <p className="text-xs text-[#555575] text-center py-10">Tapez un pseudo pour chercher</p>
+          ) : searchResults.length === 0 && !searchLoading ? (
+            <p className="text-xs text-[#555575] text-center py-10">Aucun utilisateur trouvé</p>
           ) : (
-            conversations.map((conv) => {
-              const sent = sentConvIds.has(conv.id);
-              const sending = sendingConvId === conv.id;
+            searchResults.map((u) => {
+              const sent = sentUserIds.has(u.id);
+              const sending = sendingUserId === u.id;
               return (
                 <button
-                  key={conv.id}
-                  onClick={() => sendToConversation(conv.id)}
+                  key={u.id}
+                  onClick={(e) => { e.stopPropagation(); sendToUser(u.id); }}
                   disabled={sending || sent}
                   className="w-full flex items-center gap-3 px-5 py-3 hover:bg-[#252538] transition-colors disabled:opacity-60"
                 >
-                  <Avatar uri={conv.otherUser.avatar_url} username={conv.otherUser.username} size={38} />
-                  <span className="flex-1 text-sm font-medium text-white text-left">@{conv.otherUser.username}</span>
+                  <Avatar uri={u.avatar_url} username={u.username} size={38} />
+                  <span className="flex-1 text-sm font-medium text-white text-left">@{u.username}</span>
                   {sending && <div className="w-4 h-4 border-2 border-[#7B61FF] border-t-transparent rounded-full animate-spin shrink-0" />}
                   {sent && !sending && <span className="text-xs text-[#3ECFA8] font-semibold shrink-0">Envoyé ✓</span>}
-                  {!sent && !sending && (
-                    <span className="text-xs text-[#7B61FF] font-semibold shrink-0">Envoyer</span>
-                  )}
+                  {!sent && !sending && <span className="text-xs text-[#7B61FF] font-semibold shrink-0">Envoyer</span>}
                 </button>
               );
             })
