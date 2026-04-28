@@ -4,6 +4,11 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@/types';
 
+async function handleInvalidRefreshToken() {
+  await supabase.auth.signOut();
+  window.location.href = '/login';
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -57,7 +62,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      if (error?.message?.includes('Refresh Token Not Found')) {
+        await handleInvalidRefreshToken();
+        return;
+      }
       setSession(session);
       if (session?.user?.id) await fetchProfile(session.user.id);
       setLoading(false);
@@ -65,7 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED' && !session) {
+        handleInvalidRefreshToken();
+        return;
+      }
       setSession(session);
       if (session?.user?.id) {
         fetchProfile(session.user.id);

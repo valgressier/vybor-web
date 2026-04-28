@@ -17,12 +17,15 @@ function timeAgo(dateString: string): string {
 
 function getAgeGroup(birthYear: number): string {
   const age = new Date().getFullYear() - birthYear;
-  if (age < 18) return '< 18';
-  if (age < 25) return '18–24';
-  if (age < 35) return '25–34';
-  if (age < 45) return '35–44';
-  if (age < 55) return '45–54';
-  return '55+';
+  if (age < 15) return '';
+  if (age < 20) return '15-20';
+  if (age < 25) return '20-25';
+  if (age < 30) return '25-30';
+  if (age < 35) return '30-35';
+  if (age < 40) return '35-40';
+  if (age < 45) return '40-45';
+  if (age < 50) return '45-50';
+  return '50+';
 }
 
 interface FollowingVoteItem {
@@ -221,14 +224,18 @@ export function QuestionCard({
     votes.forEach((v) => {
       const voter = v.voter as { gender?: string; birth_year?: number; country?: string } | null;
       const gender = voter?.gender ? (GENDER_LABELS[voter.gender] ?? voter.gender) : 'Non précisé';
-      const ageGroup = voter?.birth_year ? getAgeGroup(voter.birth_year) : 'Non précisé';
-      const country = voter?.country ?? 'Non précisé';
+      const ageGroup = voter?.birth_year ? getAgeGroup(voter.birth_year) : '';
+      const country = voter?.country ?? '';
 
       if (!genderMap[gender]) genderMap[gender] = { ...initGroup(), label: gender };
-      if (!ageMap[ageGroup]) ageMap[ageGroup] = { ...initGroup(), label: ageGroup };
-      if (!countryMap[country]) countryMap[country] = { ...initGroup(), label: country };
+      if (ageGroup && !ageMap[ageGroup]) ageMap[ageGroup] = { ...initGroup(), label: ageGroup };
+      if (country && !countryMap[country]) countryMap[country] = { ...initGroup(), label: country };
 
-      for (const group of [genderMap[gender], ageMap[ageGroup], countryMap[country]]) {
+      const groups: DemoGroup[] = [genderMap[gender]];
+      if (ageGroup) groups.push(ageMap[ageGroup]);
+      if (country) groups.push(countryMap[country]);
+
+      for (const group of groups) {
         group.total++;
         if (q.format === 'yes_no') {
           if (v.answer === true) group.yes++;
@@ -241,7 +248,7 @@ export function QuestionCard({
       }
     });
 
-    const AGE_ORDER = ['< 18', '18–24', '25–34', '35–44', '45–54', '55+', 'Non précisé'];
+    const AGE_ORDER = ['15-20', '20-25', '25-30', '30-35', '35-40', '40-45', '45-50', '50+'];
     const toArray = (map: Record<string, DemoGroup>, order?: string[]) =>
       Object.values(map).sort((a, b) =>
         order
@@ -594,10 +601,11 @@ export function QuestionCard({
               : statsTab === 'age' ? stats.byAge
               : stats.byCountry;
 
-            if (groups.length === 0) {
+            const visible = groups.filter((g) => g.total > 0);
+            if (visible.length === 0) {
               return <p className="text-xs text-[#555575] text-center py-8">Pas assez de données</p>;
             }
-            return <div>{groups.map(renderStatGroup)}</div>;
+            return <div>{visible.map(renderStatGroup)}</div>;
           })()}
         </div>
       </div>

@@ -18,7 +18,7 @@ export function HomeClient() {
   return (
     <main className="flex flex-col min-h-screen">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-[#252538] bg-[#0D0D14]/80 backdrop-blur sticky top-0 z-10">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-black/10 bg-white/90 backdrop-blur sticky top-0 z-10">
         <span
           className="text-2xl font-extrabold tracking-tight"
           style={{
@@ -32,7 +32,7 @@ export function HomeClient() {
         <div className="flex items-center gap-3">
           <a
             href="/login"
-            className="px-4 py-2 rounded-xl text-sm font-semibold text-white border border-[#252538] hover:border-[#8B8BAD] transition-colors"
+            className="px-4 py-2 rounded-xl text-sm font-semibold text-[#1a1a2e] border border-[#d1d5db] hover:border-[#9ca3af] transition-colors"
           >
             Se connecter
           </a>
