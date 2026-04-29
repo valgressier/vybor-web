@@ -28,6 +28,7 @@ export default function ProfilePage({
   const [questionCount, setQuestionCount] = useState(0);
   const [answerCount, setAnswerCount] = useState(0);
   const [votesReceivedCount, setVotesReceivedCount] = useState(0);
+  const [affinity, setAffinity] = useState<number | null>(null);
   const [followStatus, setFollowStatus] = useState<FollowStatus>('none');
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
@@ -120,6 +121,34 @@ export default function ProfilePage({
       setFollowStatus('own');
     }
 
+    // Compute affinity (only when viewing someone else's profile)
+    if (user && !isOwnProfile) {
+      const [{ data: myVotes }, { data: theirVotes }] = await Promise.all([
+        supabase.from('votes').select('question_id, answer, answer_index').eq('user_id', user.id),
+        supabase.from('votes').select('question_id, answer, answer_index').eq('user_id', id),
+      ]);
+
+      const myMap: Record<string, { answer: boolean | null; answer_index: number | null }> = {};
+      (myVotes ?? []).forEach((v: { question_id: string; answer: boolean | null; answer_index: number | null }) => {
+        myMap[v.question_id] = { answer: v.answer, answer_index: v.answer_index };
+      });
+
+      let common = 0;
+      let matching = 0;
+      (theirVotes ?? []).forEach((v: { question_id: string; answer: boolean | null; answer_index: number | null }) => {
+        const mine = myMap[v.question_id];
+        if (!mine) return;
+        common++;
+        if (v.answer !== null && mine.answer !== null) {
+          if (v.answer === mine.answer) matching++;
+        } else if (v.answer_index !== null && mine.answer_index !== null) {
+          if (v.answer_index === mine.answer_index) matching++;
+        }
+      });
+
+      setAffinity(common >= 3 ? Math.round((matching / common) * 100) : null);
+    }
+
     // Fetch questions
     const canSeeQuestions =
       isOwnProfile ||
@@ -140,7 +169,7 @@ export default function ProfilePage({
       if (enriched.length > 0) {
         const qIds = enriched.map((q) => q.id);
 
-        const [{ data: myVotes }, { data: yesNoVotes }] = await Promise.all([
+        const [{ data: myVotes }, { data: allVotes }] = await Promise.all([
           user
             ? supabase
                 .from('votes')
@@ -150,9 +179,8 @@ export default function ProfilePage({
             : Promise.resolve({ data: [] }),
           supabase
             .from('votes')
-            .select('question_id, answer')
-            .in('question_id', qIds)
-            .not('answer', 'is', null),
+            .select('question_id, answer, answer_index')
+            .in('question_id', qIds),
         ]);
 
         const voteMap: Record<string, { answer?: boolean | null; answer_index?: number | null }> = {};
@@ -162,9 +190,25 @@ export default function ProfilePage({
 
         const yesCountMap: Record<string, number> = {};
         const noCountMap: Record<string, number> = {};
-        (yesNoVotes ?? []).forEach((v) => {
-          if (v.answer === true) yesCountMap[v.question_id] = (yesCountMap[v.question_id] ?? 0) + 1;
-          else noCountMap[v.question_id] = (noCountMap[v.question_id] ?? 0) + 1;
+        const optionVoteMap: Record<string, Record<number, number>> = {};
+        const scaleAccMap: Record<string, { sum: number; count: number }> = {};
+
+        const fmtMap: Record<string, string> = {};
+        enriched.forEach((q) => { fmtMap[q.id] = q.format; });
+
+        (allVotes ?? []).forEach((v) => {
+          const fmt = fmtMap[v.question_id];
+          if (fmt === 'yes_no' && v.answer !== null && v.answer !== undefined) {
+            if (v.answer) yesCountMap[v.question_id] = (yesCountMap[v.question_id] ?? 0) + 1;
+            else noCountMap[v.question_id] = (noCountMap[v.question_id] ?? 0) + 1;
+          } else if (fmt === 'multiple_choice' && v.answer_index !== null && v.answer_index !== undefined) {
+            if (!optionVoteMap[v.question_id]) optionVoteMap[v.question_id] = {};
+            optionVoteMap[v.question_id][v.answer_index] = (optionVoteMap[v.question_id][v.answer_index] ?? 0) + 1;
+          } else if (fmt === 'scale' && v.answer_index !== null && v.answer_index !== undefined) {
+            if (!scaleAccMap[v.question_id]) scaleAccMap[v.question_id] = { sum: 0, count: 0 };
+            scaleAccMap[v.question_id].sum += v.answer_index;
+            scaleAccMap[v.question_id].count += 1;
+          }
         });
 
         enriched = enriched.map((q) => ({
@@ -173,7 +217,13 @@ export default function ProfilePage({
           no_count: noCountMap[q.id] ?? 0,
           user_vote: voteMap[q.id]?.answer ?? null,
           user_vote_index: voteMap[q.id]?.answer_index ?? null,
-          option_counts: q.options ? (q.option_counts ?? q.options.map(() => 0)) : undefined,
+          option_counts: q.options
+            ? q.options.map((_: unknown, i: number) => optionVoteMap[q.id]?.[i] ?? 0)
+            : undefined,
+          total_votes: scaleAccMap[q.id]?.count ?? (q.total_votes ?? 0),
+          scale_average: scaleAccMap[q.id]?.count
+            ? scaleAccMap[q.id].sum / scaleAccMap[q.id].count
+            : (q.scale_average ?? null),
         }));
       }
 
@@ -198,22 +248,61 @@ export default function ProfilePage({
     }
 
     const questionIds = voteRows.map((v) => v.question_id);
-    const { data: qData } = await supabase
-      .from('questions')
-      .select('*, author:profiles!author_id(id, username, avatar_url)')
-      .in('id', questionIds)
-      .eq('privacy', 'public');
+    const [{ data: qData }, { data: allVotes }] = await Promise.all([
+      supabase
+        .from('questions')
+        .select('*, author:profiles!author_id(id, username, avatar_url)')
+        .in('id', questionIds)
+        .eq('privacy', 'public'),
+      supabase
+        .from('votes')
+        .select('question_id, answer, answer_index')
+        .in('question_id', questionIds),
+    ]);
 
+    // Profile user's votes (for highlighting their choice)
     const voteMap: Record<string, { answer?: boolean | null; answer_index?: number | null }> = {};
     voteRows.forEach((v) => {
       voteMap[v.question_id] = { answer: v.answer, answer_index: v.answer_index };
     });
 
+    // Compute stats from all votes
+    const yesCountMap: Record<string, number> = {};
+    const noCountMap: Record<string, number> = {};
+    const optionVoteMap: Record<string, Record<number, number>> = {};
+    const scaleAccMap: Record<string, { sum: number; count: number }> = {};
+
+    const fmtMap: Record<string, string> = {};
+    (qData ?? []).forEach((q) => { fmtMap[q.id] = q.format; });
+
+    (allVotes ?? []).forEach((v) => {
+      const fmt = fmtMap[v.question_id];
+      if (fmt === 'yes_no' && v.answer !== null && v.answer !== undefined) {
+        if (v.answer) yesCountMap[v.question_id] = (yesCountMap[v.question_id] ?? 0) + 1;
+        else noCountMap[v.question_id] = (noCountMap[v.question_id] ?? 0) + 1;
+      } else if (fmt === 'multiple_choice' && v.answer_index !== null && v.answer_index !== undefined) {
+        if (!optionVoteMap[v.question_id]) optionVoteMap[v.question_id] = {};
+        optionVoteMap[v.question_id][v.answer_index] = (optionVoteMap[v.question_id][v.answer_index] ?? 0) + 1;
+      } else if (fmt === 'scale' && v.answer_index !== null && v.answer_index !== undefined) {
+        if (!scaleAccMap[v.question_id]) scaleAccMap[v.question_id] = { sum: 0, count: 0 };
+        scaleAccMap[v.question_id].sum += v.answer_index;
+        scaleAccMap[v.question_id].count += 1;
+      }
+    });
+
     const enriched: Question[] = (qData ?? []).map((q) => ({
       ...q,
+      yes_count: yesCountMap[q.id] ?? 0,
+      no_count: noCountMap[q.id] ?? 0,
       user_vote: voteMap[q.id]?.answer ?? null,
       user_vote_index: voteMap[q.id]?.answer_index ?? null,
-      option_counts: q.options ? (q.option_counts ?? q.options.map(() => 0)) : undefined,
+      option_counts: q.options
+        ? q.options.map((_: unknown, i: number) => optionVoteMap[q.id]?.[i] ?? 0)
+        : undefined,
+      total_votes: scaleAccMap[q.id]?.count ?? (q.total_votes ?? 0),
+      scale_average: scaleAccMap[q.id]?.count
+        ? scaleAccMap[q.id].sum / scaleAccMap[q.id].count
+        : (q.scale_average ?? null),
     }));
 
     setAnswers(enriched);
@@ -346,8 +435,24 @@ export default function ProfilePage({
         </div>
         <div className="flex-1 mb-1">
           <h1 className="text-white font-bold text-xl">@{profile.username}</h1>
+          {affinity !== null && (
+            <div className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+              style={{
+                background: affinity >= 80
+                  ? 'linear-gradient(135deg, #FF4D6A22, #8B5CF622)'
+                  : affinity >= 50
+                  ? 'linear-gradient(135deg, #7B61FF22, #3E9EFF22)'
+                  : '#25253822',
+                border: `1px solid ${affinity >= 80 ? '#FF4D6A44' : affinity >= 50 ? '#7B61FF44' : '#3A3A5544'}`,
+                color: affinity >= 80 ? '#FF4D6A' : affinity >= 50 ? '#9B8BFF' : '#8B8BAD',
+              }}
+            >
+              <span>{affinity >= 80 ? '💜' : affinity >= 50 ? '💙' : '🩶'}</span>
+              <span>{affinity}% d&apos;affinité</span>
+            </div>
+          )}
           {profile.country && (
-            <p className="text-xs text-[#555575]">📍 {profile.country}</p>
+            <p className="text-xs text-[#555575] mt-0.5">📍 {profile.country}</p>
           )}
         </div>
       </div>
