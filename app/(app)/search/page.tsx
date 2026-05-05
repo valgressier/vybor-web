@@ -72,7 +72,11 @@ export default function SearchPage() {
       .ilike('text', `%${q}%`)
       .order('created_at', { ascending: false })
       .limit(30);
-    setQuestions((data as QuestionResult[]) ?? []);
+    const mapped: QuestionResult[] = (data ?? []).map((row: any) => ({
+      ...row,
+      author: Array.isArray(row.author) ? (row.author[0] ?? null) : (row.author ?? null),
+    }));
+    setQuestions(mapped);
     setLoading(false);
   }, []);
 
