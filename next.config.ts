@@ -22,7 +22,7 @@ const securityHeaders = [
       // Supabase storage + Google avatars
       `img-src 'self' data: blob: https://${SUPABASE_HOST} https://lh3.googleusercontent.com`,
       // Supabase API + Supabase Realtime (wss) + Google OAuth
-      `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} https://accounts.google.com`,
+      `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} https://accounts.google.com https://translation.googleapis.com`,
       "font-src 'self'",
       "frame-src 'none'",
       "object-src 'none'",

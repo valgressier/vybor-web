@@ -108,6 +108,8 @@ export function QuestionCard({
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_TRANSLATE_KEY;
+    console.log('[Translate] clé (5 premiers chars):', apiKey ? apiKey.slice(0, 5) : 'ABSENTE');
+    console.log('[Translate] navigator.language:', typeof window !== 'undefined' ? navigator.language : 'SSR');
     if (!apiKey || !initialQ.text) return;
     fetch(`https://translation.googleapis.com/language/translate/v2/detect?key=${apiKey}`, {
       method: 'POST',
@@ -117,6 +119,7 @@ export function QuestionCard({
       .then((r) => r.json())
       .then((data) => {
         const lang: string | undefined = data?.data?.detections?.[0]?.[0]?.language;
+        console.log('[Translate] détectée:', lang, '| navigateur:', browserLang, '| question:', initialQ.text.slice(0, 50));
         if (lang && lang !== browserLang) setDetectedLang(lang);
       })
       .catch(() => {});
