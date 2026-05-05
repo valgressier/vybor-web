@@ -428,33 +428,19 @@ export default function ProfilePage({
         />
       )}
 
-      {/* Profile header */}
-      <div className="flex items-end gap-4 -mt-12 px-2 mb-4">
-        <div className="ring-4 ring-[#0D0D14] rounded-full">
+      {/* Avatar — overlaps cover bottom */}
+      <div className="-mt-10 px-2 mb-3">
+        <div className="ring-4 ring-[#0D0D14] rounded-full w-fit">
           <Avatar uri={profile.avatar_url} username={profile.username} size={80} />
         </div>
-        <div className="flex-1 mb-1">
-          <h1 className="text-white font-bold text-xl">@{profile.username}</h1>
-          {affinity !== null && (
-            <div className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-full text-xs font-semibold"
-              style={{
-                background: affinity >= 80
-                  ? 'linear-gradient(135deg, #FF4D6A22, #8B5CF622)'
-                  : affinity >= 50
-                  ? 'linear-gradient(135deg, #7B61FF22, #3E9EFF22)'
-                  : '#25253822',
-                border: `1px solid ${affinity >= 80 ? '#FF4D6A44' : affinity >= 50 ? '#7B61FF44' : '#3A3A5544'}`,
-                color: affinity >= 80 ? '#FF4D6A' : affinity >= 50 ? '#9B8BFF' : '#8B8BAD',
-              }}
-            >
-              <span>{affinity >= 80 ? '💜' : affinity >= 50 ? '💙' : '🩶'}</span>
-              <span>{affinity}% d&apos;affinité</span>
-            </div>
-          )}
-          {profile.country && (
-            <p className="text-xs text-[#555575] mt-0.5">📍 {profile.country}</p>
-          )}
-        </div>
+      </div>
+
+      {/* Name / country */}
+      <div className="px-2 mb-4">
+        <h1 className="text-white font-bold text-xl">@{profile.username}</h1>
+        {profile.country && (
+          <p className="text-xs text-[#555575] mt-0.5">📍 {profile.country}</p>
+        )}
       </div>
 
       {profile.bio && (
@@ -491,10 +477,40 @@ export default function ProfilePage({
       </div>
 
       {/* Votes récoltés */}
-      <p className="px-2 mb-5 text-xs text-[#555575]">
+      <p className="px-2 mb-3 text-xs text-[#555575]">
         Votes récoltés :{' '}
         <span className="text-white font-semibold">{votesReceivedCount}</span>
       </p>
+
+      {/* Affinity bar */}
+      {affinity !== null && (
+        <div className="px-2 mb-5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-[#555575]">
+              {affinity >= 80 ? '💜' : affinity >= 50 ? '💙' : '🩶'} Affinité
+            </span>
+            <span
+              className="text-xs font-bold"
+              style={{ color: affinity >= 80 ? '#FF4D6A' : affinity >= 50 ? '#9B8BFF' : '#8B8BAD' }}
+            >
+              {affinity}%
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-[#252538] overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${affinity}%`,
+                background: affinity >= 80
+                  ? 'linear-gradient(90deg, #FF4D6A, #8B5CF6)'
+                  : affinity >= 50
+                  ? 'linear-gradient(90deg, #7B61FF, #3E9EFF)'
+                  : '#555575',
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="flex gap-3 px-2 mb-6">

@@ -97,6 +97,62 @@ export function QuestionCard({
   const [statsLoaded, setStatsLoaded] = useState(false);
   const [statsTab, setStatsTab] = useState<'gender' | 'age' | 'country'>('gender');
 
+  // Translation
+  const [detectedLang, setDetectedLang] = useState<string | null>(null);
+  const [isTranslated, setIsTranslated] = useState(false);
+  const [translatedText, setTranslatedText] = useState<string | null>(null);
+  const [translatedOptions, setTranslatedOptions] = useState<string[] | null>(null);
+  const [translateLoading, setTranslateLoading] = useState(false);
+
+  const browserLang = typeof window !== 'undefined' ? navigator.language.split('-')[0] : 'fr';
+
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_TRANSLATE_KEY;
+    if (!apiKey || !initialQ.text) return;
+    fetch(`https://translation.googleapis.com/language/translate/v2/detect?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: initialQ.text }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const lang: string | undefined = data?.data?.detections?.[0]?.[0]?.language;
+        if (lang && lang !== browserLang) setDetectedLang(lang);
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTranslate = async () => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_TRANSLATE_KEY;
+    if (!apiKey || translateLoading) return;
+    setTranslateLoading(true);
+    try {
+      const texts = [q.text, ...(q.options ?? [])];
+      const res = await fetch(
+        `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ q: texts, target: browserLang, format: 'text' }),
+        }
+      );
+      const data = await res.json();
+      const translations: string[] = (data?.data?.translations ?? []).map(
+        (t: { translatedText: string }) => t.translatedText
+      );
+      if (translations.length > 0) {
+        setTranslatedText(translations[0]);
+        if (q.options && translations.length > 1) {
+          setTranslatedOptions(translations.slice(1));
+        }
+        setIsTranslated(true);
+      }
+    } catch {
+      // ignore
+    }
+    setTranslateLoading(false);
+  };
+
   const hasVoted =
     q.format === 'yes_no'
       ? q.user_vote !== null && q.user_vote !== undefined
@@ -353,7 +409,7 @@ export function QuestionCard({
     } else if (q.format === 'multiple_choice' && answerIndex != null) {
       return (
         <span className="text-[#7B61FF] font-semibold text-xs">
-          {q.options?.[answerIndex] ?? `Option ${answerIndex + 1}`}
+          {displayOptions[answerIndex] ?? q.options?.[answerIndex] ?? `Option ${answerIndex + 1}`}
         </span>
       );
     } else if (q.format === 'scale' && answerIndex != null) {
@@ -428,6 +484,11 @@ export function QuestionCard({
     }
   };
 
+  // ── Translation helpers ────────────────────────────────────────────────────
+  const displayText = isTranslated && translatedText ? translatedText : q.text;
+  const displayOptions = isTranslated && translatedOptions ? translatedOptions : (q.options ?? []);
+  const showTranslateBtn = !isTranslated && !!detectedLang;
+
   // ── Card content ───────────────────────────────────────────────────────────
   const cardContent = (
     <div className="bg-[#16161F] border border-[#252538] rounded-2xl p-4 hover:border-[#FF4D6A]/30 transition-all duration-200">
@@ -445,7 +506,33 @@ export function QuestionCard({
       </div>
 
       {/* Question text */}
-      <p className="text-white font-semibold text-base mb-4 leading-snug">{q.text}</p>
+      <p className="text-white font-semibold text-base leading-snug">{displayText}</p>
+
+      {/* Translate button */}
+      <div className="mt-1.5 mb-3 flex items-center gap-2">
+        {showTranslateBtn && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTranslate(); }}
+            disabled={translateLoading}
+            className="flex items-center gap-1 text-[10px] text-[#555575] hover:text-[#8B8BAD] transition-colors disabled:opacity-50"
+          >
+            {translateLoading ? (
+              <span className="w-3 h-3 border border-[#555575] border-t-transparent rounded-full animate-spin inline-block" />
+            ) : (
+              <span>🌐</span>
+            )}
+            Traduire
+          </button>
+        )}
+        {isTranslated && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsTranslated(false); }}
+            className="flex items-center gap-1 text-[10px] text-[#555575] hover:text-[#8B8BAD] transition-colors"
+          >
+            <span>↩</span> Voir l&apos;original
+          </button>
+        )}
+      </div>
 
       {/* Question image */}
       {q.image_url && (
@@ -507,6 +594,7 @@ export function QuestionCard({
                 const pct = totalMC > 0 ? Math.round((count / totalMC) * 100) : 0;
                 const isSelected = q.user_vote_index === i;
                 const imgUrl = q.option_images?.[i];
+                const label = displayOptions[i] ?? opt;
                 return (
                   <button
                     key={i}
@@ -516,13 +604,13 @@ export function QuestionCard({
                       isSelected ? 'border-[#7B61FF]' : 'border-[#252538] hover:border-[#7B61FF]/40'
                     }`}
                   >
-                    {imgUrl && <img src={imgUrl} alt={opt} className="w-full h-28 object-cover" />}
+                    {imgUrl && <img src={imgUrl} alt={label} className="w-full h-28 object-cover" />}
                     <div className="relative px-3 py-2 overflow-hidden">
                       {(hasVoted || readOnly) && (
                         <div className="absolute inset-0 origin-left transition-all duration-500 ease-out"
                           style={{ background: isSelected ? '#7B61FF33' : '#7B61FF11', width: `${pct}%` }} />
                       )}
-                      <span className={`relative text-xs font-semibold ${isSelected ? 'text-white' : 'text-[#8B8BAD]'}`}>{opt}</span>
+                      <span className={`relative text-xs font-semibold ${isSelected ? 'text-white' : 'text-[#8B8BAD]'}`}>{label}</span>
                       {(hasVoted || readOnly) && <span className="relative float-right text-xs text-[#8B8BAD] font-semibold">{pct}%</span>}
                     </div>
                   </button>
@@ -537,6 +625,7 @@ export function QuestionCard({
               const count = q.option_counts?.[i] ?? 0;
               const pct = totalMC > 0 ? Math.round((count / totalMC) * 100) : 0;
               const isSelected = q.user_vote_index === i;
+              const label = displayOptions[i] ?? opt;
               return (
                 <button
                   key={i}
@@ -550,7 +639,7 @@ export function QuestionCard({
                     <div className="absolute inset-0 origin-left transition-all duration-500 ease-out"
                       style={{ background: isSelected ? '#7B61FF33' : '#7B61FF11', width: `${pct}%` }} />
                   )}
-                  <span className="relative">{opt}</span>
+                  <span className="relative">{label}</span>
                   {(hasVoted || readOnly) && <span className="relative text-xs text-[#8B8BAD] font-semibold">{pct}%</span>}
                 </button>
               );
